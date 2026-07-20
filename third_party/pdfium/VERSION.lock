@@ -1,0 +1,10 @@
+source_repository=https://github.com/bblanchon/pdfium-binaries
+release_tag=chromium/5406
+pdfium_version=109.0.5406.0
+chromium_major=109
+platform=win-x86
+v8=false
+xfa=false
+archive=pdfium-win-x86.tgz
+archive_sha256=BDB2A445D5A14F972A86C2254A4FF189EF286A02F1CDD1EC3B9DA49A76F3B786
+pdfium_dll_sha256=755195E28EF43C182FB07ED600DAA3C7EB7F00EF4DD65E7459C9626DB572767F
