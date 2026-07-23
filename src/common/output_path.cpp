@@ -71,16 +71,33 @@ std::wstring FileNameFromPath(const std::wstring& path) { return LastComponent(p
 
 std::wstring BaseOutputDirectory(const std::wstring& pdf_path) {
   const std::wstring parent = ParentDirectory(pdf_path);
+  return BaseOutputDirectory(pdf_path, parent);
+}
+
+std::wstring BaseOutputDirectory(const std::wstring& pdf_path, const std::wstring& output_root) {
   std::wstring name = LastComponent(pdf_path);
   const size_t dot = name.find_last_of(L'.');
   if (dot != std::wstring::npos) name.resize(dot);
-  return parent + L"\\" + name + L"_图片";
+  std::wstring root = output_root;
+  while (root.size() > 3 && (root.back() == L'\\' || root.back() == L'/')) root.pop_back();
+  return root + L"\\" + name + L"_图片";
 }
 
 bool PrepareOutputPlan(const std::wstring& pdf_path, OutputPlan* plan, std::wstring* error) {
+  return PrepareOutputPlan(pdf_path, ParentDirectory(pdf_path), plan, error);
+}
+
+bool PrepareOutputPlan(const std::wstring& pdf_path, const std::wstring& output_root,
+                       OutputPlan* plan, std::wstring* error) {
   if (!plan) return false;
+  const DWORD root_attributes = GetFileAttributesW(output_root.c_str());
+  if (root_attributes == INVALID_FILE_ATTRIBUTES ||
+      !(root_attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+    if (error) *error = L"输出目录不存在";
+    return false;
+  }
   OutputPlan candidate;
-  const std::wstring base = BaseOutputDirectory(pdf_path);
+  const std::wstring base = BaseOutputDirectory(pdf_path, output_root);
   candidate.final_directory = base;
   for (unsigned suffix = 2; Exists(candidate.final_directory); ++suffix) {
     if (suffix > 100000) {
@@ -139,4 +156,3 @@ bool CleanupTemporaryDirectory(const std::wstring& temporary_directory) {
 }
 
 }  // namespace pdfimg
-

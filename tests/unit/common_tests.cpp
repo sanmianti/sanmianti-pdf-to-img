@@ -71,6 +71,19 @@ int wmain(int argc, wchar_t* argv[]) {
   Check(pdfimg::BaseOutputDirectory(pdf) == root + L"\\项目 方案（测试）_图片",
         "base output naming");
 
+  const std::wstring custom_output = root + L"\\自定义保存位置";
+  CreateDirectoryW(custom_output.c_str(), nullptr);
+  Check(pdfimg::BaseOutputDirectory(pdf, custom_output) ==
+            custom_output + L"\\项目 方案（测试）_图片",
+        "base output naming in configured folder");
+  pdfimg::OutputPlan configured;
+  std::wstring configured_error;
+  Check(pdfimg::PrepareOutputPlan(pdf, custom_output, &configured, &configured_error),
+        "prepare output plan in configured folder");
+  Check(pdfimg::CleanupTemporaryDirectory(configured.temporary_directory),
+        "clean configured output temporary directory");
+  RemoveDirectoryW(custom_output.c_str());
+
   pdfimg::OutputPlan first;
   std::wstring error;
   Check(pdfimg::PrepareOutputPlan(pdf, &first, &error), "prepare output plan");

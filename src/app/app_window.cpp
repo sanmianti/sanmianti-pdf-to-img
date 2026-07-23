@@ -11,6 +11,7 @@
 #include <commdlg.h>
 #include <d2d1helper.h>
 #include <shellapi.h>
+#include <shlobj.h>
 
 #include <algorithm>
 #include <memory>
@@ -61,6 +62,20 @@ std::string ExitCodeToken(DWORD code) {
   }
 }
 
+const wchar_t* EnglishMessageForToken(const std::string& token) {
+  if (token == "NOT_PDF") return L"Please choose a PDF file.";
+  if (token == "FILE_NOT_FOUND") return L"The file does not exist or has been moved.";
+  if (token == "CANNOT_READ") return L"The PDF cannot be read. Check its permissions.";
+  if (token == "PDF_DAMAGED") return L"The PDF is damaged or unsupported.";
+  if (token == "PASSWORD_REQUIRED") return L"Password-protected PDFs are not supported yet.";
+  if (token == "SECURITY_UNSUPPORTED") return L"This PDF security scheme is unsupported.";
+  if (token == "CANNOT_WRITE") return L"Images cannot be written to the selected folder.";
+  if (token == "PAGE_TOO_LARGE") return L"A PDF page is too large to convert.";
+  if (token == "MULTIPLE_FILES") return L"Only one PDF can be converted at a time.";
+  if (token == "BUSY") return L"A conversion is already running.";
+  return L"Conversion failed. Please try another PDF.";
+}
+
 }  // namespace
 
 AppWindow::~AppWindow() {
@@ -76,6 +91,7 @@ AppWindow::~AppWindow() {
 
 bool AppWindow::Create(HINSTANCE instance, int show_command) {
   instance_ = instance;
+  settings_ = LoadAppSettings();
   if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &d2d_factory_)) ||
       FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
                                  reinterpret_cast<IUnknown**>(&write_factory_)))) {
@@ -116,7 +132,8 @@ bool AppWindow::Create(HINSTANCE instance, int show_command) {
   window_class.lpszClassName = kWindowClass;
   if (!RegisterClassExW(&window_class) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
 
-  hwnd_ = CreateWindowExW(0, kWindowClass, L"PDF 转图片", WS_OVERLAPPEDWINDOW,
+  hwnd_ = CreateWindowExW(0, kWindowClass,
+                          Text(L"PDF 转图片", L"PDF to Image"), WS_OVERLAPPEDWINDOW,
                           CW_USEDEFAULT, CW_USEDEFAULT,
                           static_cast<int>(600.0f * dpi_scale_ + 0.5f),
                           static_cast<int>(380.0f * dpi_scale_ + 0.5f), nullptr, nullptr, instance,
@@ -157,19 +174,44 @@ LRESULT AppWindow::HandleMessage(UINT message, WPARAM wparam, LPARAM lparam) {
     }
     case WM_LBUTTONUP:
       if (state_ == State::kConverting) return 0;
-      if (state_ == State::kSuccess && PointIn(PrimaryActionRect(), lparam, dpi_scale_)) {
-        OpenOutputDirectory();
-      } else {
-        ChoosePdf();
+      {
+        RECT client{};
+        GetClientRect(hwnd_, &client);
+        const float width = static_cast<float>(client.right) / dpi_scale_;
+        const float height = static_cast<float>(client.bottom) / dpi_scale_;
+        if (view_ == View::kSettings) {
+          if (PointIn(BackButtonRect(), lparam, dpi_scale_)) {
+            view_ = View::kMain;
+          } else if (PointIn(OutputButtonRect(width), lparam, dpi_scale_)) {
+            ChooseOutputDirectory();
+          } else if (PointIn(LanguageButtonRect(width), lparam, dpi_scale_)) {
+            ToggleLanguage();
+          } else if (PointIn(FeedbackRect(height), lparam, dpi_scale_)) {
+            OpenFeedback();
+          }
+          InvalidateRect(hwnd_, nullptr, FALSE);
+        } else if (PointIn(SettingsButtonRect(width), lparam, dpi_scale_)) {
+          view_ = View::kSettings;
+          EnsureSettingsHeight();
+          InvalidateRect(hwnd_, nullptr, FALSE);
+        } else if (PointIn(PrimaryActionRect(), lparam, dpi_scale_)) {
+          if (state_ == State::kSuccess) {
+            OpenOutputDirectory();
+          } else {
+            ChoosePdf();
+          }
+        }
       }
       return 0;
     case WM_DROPFILES: {
       auto files = ReadDroppedFiles(reinterpret_cast<HDROP>(wparam));
       if (state_ == State::kConverting) {
-        MessageBoxW(hwnd_, UserMessageForToken("BUSY"), L"PDF 转图片", MB_OK | MB_ICONINFORMATION);
+        MessageBoxW(hwnd_, Text(UserMessageForToken("BUSY"), L"A conversion is already running."),
+                    Text(L"PDF 转图片", L"PDF to Image"), MB_OK | MB_ICONINFORMATION);
       } else if (files.size() != 1) {
         SetError("MULTIPLE_FILES");
       } else {
+        view_ = View::kMain;
         StartConversion(files.front());
       }
       return 0;
@@ -253,6 +295,28 @@ D2D1_RECT_F AppWindow::PrimaryActionRect() const {
   return D2D1::RectF(70.0f, 142.0f, client_width - 70.0f, client_height - 50.0f);
 }
 
+D2D1_RECT_F AppWindow::SettingsButtonRect(float width) const {
+  return D2D1::RectF(width - 55.0f, 15.0f, width - 19.0f, 51.0f);
+}
+
+D2D1_RECT_F AppWindow::BackButtonRect() const { return D2D1::RectF(18, 16, 58, 52); }
+
+D2D1_RECT_F AppWindow::OutputButtonRect(float width) const {
+  return D2D1::RectF(width - 132.0f, 128.0f, width - 42.0f, 170.0f);
+}
+
+D2D1_RECT_F AppWindow::LanguageButtonRect(float width) const {
+  return D2D1::RectF(width - 190.0f, 248.0f, width - 42.0f, 290.0f);
+}
+
+D2D1_RECT_F AppWindow::FeedbackRect(float height) const {
+  return D2D1::RectF(34.0f, height - 45.0f, 155.0f, height - 14.0f);
+}
+
+const wchar_t* AppWindow::Text(const wchar_t* chinese, const wchar_t* english) const {
+  return settings_.language == InterfaceLanguage::kEnglish ? english : chinese;
+}
+
 void AppWindow::Paint() {
   PAINTSTRUCT paint{};
   BeginPaint(hwnd_, &paint);
@@ -275,20 +339,78 @@ void AppWindow::Paint() {
                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
   };
 
-  if (state_ == State::kIdle) {
-    draw_text(L"PDF 转图片", title_format_, D2D1::RectF(20, 42, width - 20, 88),
+  auto draw_left_text = [&](const std::wstring& text, IDWriteTextFormat* format,
+                            const D2D1_RECT_F& rect, D2D1_COLOR_F color) {
+    format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    draw_text(text, format, rect, color);
+    format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+  };
+
+  if (view_ == View::kSettings) {
+    draw_text(Text(L"设置", L"Settings"), title_format_, D2D1::RectF(70, 22, width - 70, 66),
               D2D1::ColorF(0x172033));
-    draw_text(L"拖入 PDF，自动按页生成图片", small_format_, D2D1::RectF(20, 91, width - 20, 122),
+    draw_text(L"‹", title_format_, BackButtonRect(), D2D1::ColorF(0x687386));
+
+    draw_left_text(Text(L"保存位置", L"Save location"), heading_format_,
+                   D2D1::RectF(42, 76, width - 42, 106), D2D1::ColorF(0x172033));
+    draw_left_text(Text(L"生成的图片将保存在此目录", L"Converted images are saved here"),
+                   small_format_, D2D1::RectF(42, 102, width - 42, 124),
+                   D2D1::ColorF(0x687386));
+    const D2D1_RECT_F path_box = D2D1::RectF(42, 128, width - 142, 170);
+    brush_->SetColor(D2D1::ColorF(0xFFFFFF));
+    render_target_->FillRoundedRectangle(D2D1::RoundedRect(path_box, 7, 7), brush_);
+    brush_->SetColor(D2D1::ColorF(0xD8DFEA));
+    render_target_->DrawRoundedRectangle(D2D1::RoundedRect(path_box, 7, 7), brush_, 1.0f);
+    draw_left_text(settings_.output_directory, small_format_,
+                   D2D1::RectF(55, 128, width - 154, 170), D2D1::ColorF(0x354052));
+    const D2D1_RECT_F output_button = OutputButtonRect(width);
+    brush_->SetColor(D2D1::ColorF(0xFFFFFF));
+    render_target_->FillRoundedRectangle(D2D1::RoundedRect(output_button, 7, 7), brush_);
+    brush_->SetColor(D2D1::ColorF(0xBFC9D8));
+    render_target_->DrawRoundedRectangle(D2D1::RoundedRect(output_button, 7, 7), brush_, 1.0f);
+    draw_text(Text(L"选择", L"Browse"), small_format_, output_button, D2D1::ColorF(0x285FCA));
+
+    draw_left_text(Text(L"界面语言", L"Interface language"), heading_format_,
+                   D2D1::RectF(42, 190, width - 42, 220), D2D1::ColorF(0x172033));
+    draw_left_text(Text(L"修改后立即生效", L"Changes apply immediately"), small_format_,
+                   D2D1::RectF(42, 217, width - 42, 241), D2D1::ColorF(0x687386));
+    const D2D1_RECT_F language_button = LanguageButtonRect(width);
+    brush_->SetColor(D2D1::ColorF(0xFFFFFF));
+    render_target_->FillRoundedRectangle(D2D1::RoundedRect(language_button, 7, 7), brush_);
+    brush_->SetColor(D2D1::ColorF(0xBFC9D8));
+    render_target_->DrawRoundedRectangle(D2D1::RoundedRect(language_button, 7, 7), brush_, 1.0f);
+    draw_text(settings_.language == InterfaceLanguage::kChinese ? L"简体中文 ⌄" : L"English ⌄",
+              small_format_, language_button, D2D1::ColorF(0x354052));
+
+    draw_left_text(Text(L"问题反馈", L"Feedback"), small_format_, FeedbackRect(height),
+                   D2D1::ColorF(0x3478F6));
+    draw_left_text(L"v1.0.0", small_format_,
+                   D2D1::RectF(width - 94.0f, height - 45.0f, width - 34.0f, height - 14.0f),
+                   D2D1::ColorF(0x7D8798));
+
+    const HRESULT result = render_target_->EndDraw();
+    if (result == D2DERR_RECREATE_TARGET) DiscardGraphicsResources();
+    EndPaint(hwnd_, &paint);
+    return;
+  }
+
+  draw_text(L"⚙", body_format_, SettingsButtonRect(width), D2D1::ColorF(0x687386));
+
+  if (state_ == State::kIdle) {
+    draw_text(Text(L"PDF 转图片", L"PDF to Image"), title_format_, D2D1::RectF(20, 42, width - 20, 88),
+              D2D1::ColorF(0x172033));
+    draw_text(Text(L"拖入 PDF，自动按页生成图片", L"Drop a PDF to create one image per page"), small_format_, D2D1::RectF(20, 91, width - 20, 122),
               D2D1::ColorF(0x687386));
     const D2D1_RECT_F action = PrimaryActionRect();
     brush_->SetColor(D2D1::ColorF(0x3478F6));
     render_target_->DrawRoundedRectangle(D2D1::RoundedRect(action, 10, 10), brush_, 2.0f);
-    draw_text(L"将 PDF 拖到这里\n或单击选择文件", heading_format_, action,
+    draw_text(Text(L"将 PDF 拖到这里\n或单击选择文件", L"Drop a PDF here\nor click to choose a file"), heading_format_, action,
               D2D1::ColorF(0x285FCA));
-    draw_text(L"图片将保存到 PDF 文件所在目录", small_format_,
+    draw_text(Text(L"图片将保存到设置的目录", L"Images will be saved to the selected folder"), small_format_,
               D2D1::RectF(20, height - 44, width - 20, height - 16), D2D1::ColorF(0x7D8798));
   } else if (state_ == State::kConverting) {
-    draw_text(L"正在转换：" + input_file_name_, heading_format_, D2D1::RectF(30, 62, width - 30, 112),
+    draw_text(std::wstring(Text(L"正在转换：", L"Converting: ")) + input_file_name_,
+              heading_format_, D2D1::RectF(30, 62, width - 30, 112),
               D2D1::ColorF(0x172033));
     const float left = 65.0f;
     const float right = width - 65.0f;
@@ -305,33 +427,40 @@ void AppWindow::Paint() {
     }
     const std::wstring count = total_pages_ > 0
                                    ? std::to_wstring(current_page_) + L" / " +
-                                         std::to_wstring(total_pages_) + L" 页"
-                                   : L"正在读取 PDF…";
+                                         std::to_wstring(total_pages_) + Text(L" 页", L" pages")
+                                   : Text(L"正在读取 PDF…", L"Reading PDF...");
     draw_text(count, body_format_, D2D1::RectF(20, 190, width - 20, 226), D2D1::ColorF(0x354052));
     const std::wstring detail = current_output_file_.empty()
-                                    ? L"正在准备图片"
-                                    : L"正在生成 " + current_output_file_;
+                                    ? Text(L"正在准备图片", L"Preparing images")
+                                    : std::wstring(Text(L"正在生成 ", L"Creating ")) +
+                                          current_output_file_;
     draw_text(detail, small_format_, D2D1::RectF(20, 230, width - 20, 268), D2D1::ColorF(0x7D8798));
   } else if (state_ == State::kSuccess) {
-    draw_text(L"✓  转换完成", title_format_, D2D1::RectF(20, 65, width - 20, 118),
+    draw_text(Text(L"✓  转换完成", L"✓  Conversion complete"), title_format_,
+              D2D1::RectF(20, 65, width - 20, 118),
               D2D1::ColorF(0x168A55));
-    draw_text(L"已生成 " + std::to_wstring(total_pages_) + L" 张 PNG 图片", body_format_,
+    draw_text(std::wstring(Text(L"已生成 ", L"Created ")) + std::to_wstring(total_pages_) +
+                  Text(L" 张 PNG 图片", L" PNG images"), body_format_,
               D2D1::RectF(20, 126, width - 20, 172), D2D1::ColorF(0x4D596B));
     const D2D1_RECT_F button = PrimaryActionRect();
     brush_->SetColor(D2D1::ColorF(0x3478F6));
     render_target_->FillRoundedRectangle(D2D1::RoundedRect(button, 7, 7), brush_);
-    draw_text(L"打开图片文件夹", body_format_, button, D2D1::ColorF(0xFFFFFF));
-    draw_text(L"可继续拖入新的 PDF", small_format_, D2D1::RectF(20, 290, width - 20, 326),
+    draw_text(Text(L"打开图片文件夹", L"Open image folder"), body_format_, button,
+              D2D1::ColorF(0xFFFFFF));
+    draw_text(Text(L"可继续拖入新的 PDF", L"Drop another PDF to continue"), small_format_,
+              D2D1::RectF(20, 290, width - 20, 326),
               D2D1::ColorF(0x7D8798));
   } else {
-    draw_text(L"未能完成转换", title_format_, D2D1::RectF(20, 55, width - 20, 108),
+    draw_text(Text(L"未能完成转换", L"Conversion failed"), title_format_,
+              D2D1::RectF(20, 55, width - 20, 108),
               D2D1::ColorF(0xC04444));
     draw_text(error_message_, body_format_, D2D1::RectF(35, 116, width - 35, 177),
               D2D1::ColorF(0x4D596B));
     const D2D1_RECT_F action = PrimaryActionRect();
     brush_->SetColor(D2D1::ColorF(0x3478F6));
     render_target_->DrawRoundedRectangle(D2D1::RoundedRect(action, 10, 10), brush_, 2.0f);
-    draw_text(L"重新选择 PDF", heading_format_, action, D2D1::ColorF(0x285FCA));
+    draw_text(Text(L"重新选择 PDF", L"Choose another PDF"), heading_format_, action,
+              D2D1::ColorF(0x285FCA));
   }
 
   const HRESULT result = render_target_->EndDraw();
@@ -344,7 +473,9 @@ void AppWindow::ChoosePdf() {
   OPENFILENAMEW dialog{};
   dialog.lStructSize = sizeof(dialog);
   dialog.hwndOwner = hwnd_;
-  dialog.lpstrFilter = L"PDF 文件 (*.pdf)\0*.pdf\0所有文件 (*.*)\0*.*\0\0";
+  const wchar_t filter_zh[] = L"PDF 文件 (*.pdf)\0*.pdf\0所有文件 (*.*)\0*.*\0\0";
+  const wchar_t filter_en[] = L"PDF files (*.pdf)\0*.pdf\0All files (*.*)\0*.*\0\0";
+  dialog.lpstrFilter = settings_.language == InterfaceLanguage::kEnglish ? filter_en : filter_zh;
   dialog.lpstrFile = path;
   dialog.nMaxFile = static_cast<DWORD>(std::size(path));
   dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
@@ -352,9 +483,86 @@ void AppWindow::ChoosePdf() {
   if (GetOpenFileNameW(&dialog)) StartConversion(path);
 }
 
+void AppWindow::ChooseOutputDirectory() {
+  IFileOpenDialog* dialog = nullptr;
+  if (FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+                              IID_PPV_ARGS(&dialog)))) {
+    return;
+  }
+  DWORD options = 0;
+  dialog->GetOptions(&options);
+  dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+  dialog->SetTitle(Text(L"选择图片保存位置", L"Choose where images are saved"));
+
+  IShellItem* initial = nullptr;
+  if (SUCCEEDED(SHCreateItemFromParsingName(settings_.output_directory.c_str(), nullptr,
+                                             IID_PPV_ARGS(&initial)))) {
+    dialog->SetFolder(initial);
+    initial->Release();
+  }
+
+  if (SUCCEEDED(dialog->Show(hwnd_))) {
+    IShellItem* selected = nullptr;
+    if (SUCCEEDED(dialog->GetResult(&selected))) {
+      PWSTR path = nullptr;
+      if (SUCCEEDED(selected->GetDisplayName(SIGDN_FILESYSPATH, &path)) && path) {
+        settings_.output_directory = path;
+        SaveAppSettings(settings_);
+        CoTaskMemFree(path);
+      }
+      selected->Release();
+    }
+  }
+  dialog->Release();
+}
+
+void AppWindow::ToggleLanguage() {
+  settings_.language = settings_.language == InterfaceLanguage::kChinese
+                           ? InterfaceLanguage::kEnglish
+                           : InterfaceLanguage::kChinese;
+  SaveAppSettings(settings_);
+  SetWindowTextW(hwnd_, Text(L"PDF 转图片", L"PDF to Image"));
+  if (state_ == State::kError && !worker_error_token_.empty()) {
+    error_message_ = Text(UserMessageForToken(worker_error_token_),
+                          EnglishMessageForToken(worker_error_token_));
+  }
+}
+
+void AppWindow::EnsureSettingsHeight() {
+  RECT client{};
+  RECT window{};
+  GetClientRect(hwnd_, &client);
+  GetWindowRect(hwnd_, &window);
+  const float logical_height = static_cast<float>(client.bottom) / dpi_scale_;
+  constexpr float kMinimumSettingsHeight = 355.0f;
+  if (logical_height >= kMinimumSettingsHeight) return;
+
+  const int extra = static_cast<int>((kMinimumSettingsHeight - logical_height) * dpi_scale_ + 0.5f);
+  const int new_height = window.bottom - window.top + extra;
+  int new_top = window.top;
+  MONITORINFO monitor{};
+  monitor.cbSize = sizeof(monitor);
+  if (GetMonitorInfoW(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST), &monitor) &&
+      new_top + new_height > monitor.rcWork.bottom) {
+    new_top = (std::max)(monitor.rcWork.top, monitor.rcWork.bottom - new_height);
+  }
+  SetWindowPos(hwnd_, nullptr, window.left, new_top, window.right - window.left, new_height,
+               SWP_NOACTIVATE | SWP_NOZORDER);
+}
+
+void AppWindow::OpenFeedback() {
+  const HINSTANCE result = ShellExecuteW(hwnd_, L"open", L"https://wj.qq.com/s2/27384492/508f/",
+                                        nullptr, nullptr, SW_SHOWNORMAL);
+  if (reinterpret_cast<INT_PTR>(result) <= 32) {
+    MessageBoxW(hwnd_, Text(L"无法打开反馈页面。", L"The feedback page could not be opened."),
+                Text(L"PDF 转图片", L"PDF to Image"), MB_OK | MB_ICONWARNING);
+  }
+}
+
 void AppWindow::StartConversion(const std::wstring& path) {
   if (state_ == State::kConverting) {
-    MessageBoxW(hwnd_, UserMessageForToken("BUSY"), L"PDF 转图片", MB_OK | MB_ICONINFORMATION);
+    MessageBoxW(hwnd_, Text(UserMessageForToken("BUSY"), EnglishMessageForToken("BUSY")),
+                Text(L"PDF 转图片", L"PDF to Image"), MB_OK | MB_ICONINFORMATION);
     return;
   }
   const DWORD attributes = GetFileAttributesW(path.c_str());
@@ -370,7 +578,7 @@ void AppWindow::StartConversion(const std::wstring& path) {
   LogEvent("TASK_PREPARE");
   OutputPlan plan;
   std::wstring prepare_error;
-  if (!PrepareOutputPlan(path, &plan, &prepare_error)) {
+  if (!PrepareOutputPlan(path, settings_.output_directory, &plan, &prepare_error)) {
     SetError("CANNOT_WRITE");
     return;
   }
@@ -395,7 +603,8 @@ void AppWindow::StartConversion(const std::wstring& path) {
 }
 
 void AppWindow::SetError(const std::string& token) {
-  error_message_ = UserMessageForToken(token);
+  worker_error_token_ = token;
+  error_message_ = Text(UserMessageForToken(token), EnglishMessageForToken(token));
   state_ = State::kError;
   InvalidateRect(hwnd_, nullptr, FALSE);
 }
@@ -429,7 +638,9 @@ void AppWindow::FinishWorker(DWORD exit_code) {
 
 void AppWindow::OpenOutputDirectory() {
   if (!OpenFolderExact(completed_output_directory_)) {
-    MessageBoxW(hwnd_, L"无法打开图片文件夹，请从 PDF 所在目录手动打开。", L"PDF 转图片",
+    MessageBoxW(hwnd_, Text(L"无法打开图片文件夹，请从保存位置手动打开。",
+                            L"The image folder could not be opened. Open it from the save location."),
+                Text(L"PDF 转图片", L"PDF to Image"),
                 MB_OK | MB_ICONWARNING);
     LogEvent("OPEN_OUTPUT_FAILED", "SHELL_ERROR");
     return;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/app_settings.h"
 #include "app/worker_client.h"
 #include "common/output_path.h"
 
@@ -20,6 +21,7 @@ class AppWindow {
 
  private:
   enum class State { kIdle, kConverting, kSuccess, kError };
+  enum class View { kMain, kSettings };
 
   static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam);
   LRESULT HandleMessage(UINT message, WPARAM wparam, LPARAM lparam);
@@ -27,12 +29,22 @@ class AppWindow {
   void DiscardGraphicsResources();
   void Paint();
   void ChoosePdf();
+  void ChooseOutputDirectory();
+  void OpenFeedback();
+  void ToggleLanguage();
+  void EnsureSettingsHeight();
   void StartConversion(const std::wstring& path);
   void SetError(const std::string& token);
   void FinishWorker(DWORD exit_code);
   void OpenOutputDirectory();
   D2D1_RECT_F PrimaryActionRect() const;
+  D2D1_RECT_F SettingsButtonRect(float width) const;
+  D2D1_RECT_F BackButtonRect() const;
+  D2D1_RECT_F OutputButtonRect(float width) const;
+  D2D1_RECT_F LanguageButtonRect(float width) const;
+  D2D1_RECT_F FeedbackRect(float height) const;
   std::wstring WorkerPath() const;
+  const wchar_t* Text(const wchar_t* chinese, const wchar_t* english) const;
 
   HWND hwnd_ = nullptr;
   HINSTANCE instance_ = nullptr;
@@ -46,7 +58,9 @@ class AppWindow {
   IDWriteTextFormat* small_format_ = nullptr;
   float dpi_scale_ = 1.0f;
 
+  View view_ = View::kMain;
   State state_ = State::kIdle;
+  AppSettings settings_;
   WorkerClient worker_;
   OutputPlan output_plan_;
   std::wstring input_file_name_;

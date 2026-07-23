@@ -62,6 +62,7 @@ endif()
 add_executable(PdfToImage WIN32
   src/app/main.cpp
   src/app/app_window.cpp
+  src/app/app_settings.cpp
   src/app/drop_handler.cpp
   src/app/worker_client.cpp
   resources/app.rc

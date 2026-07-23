@@ -23,7 +23,6 @@ ctest --test-dir build -C Release --output-on-failure
 
 ## 使用
 
-启动 `PdfToImage.exe`，拖入一个 PDF 或单击拖拽区选择文件。结果写到 PDF 同级的 `原文件名_图片`，已有目录永不覆盖。
+启动 `PdfToImage.exe`，拖入一个 PDF 或单击拖拽区选择文件。可从右上角设置保存位置和界面语言；结果写到所选目录下的 `原文件名_图片`，已有目录永不覆盖。
 
 最低系统为 Windows 7 SP1。程序是 x86、静态 C/C++ 运行库构建，不依赖 Java、.NET 或 VC++ Redistributable，也不包含联网功能。
-
