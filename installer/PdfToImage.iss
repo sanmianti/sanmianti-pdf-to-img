@@ -17,7 +17,7 @@ WizardStyle=modern
 OutputDir=..\release
 OutputBaseFilename=PdfToImage-Setup-1.0.0
 UninstallDisplayIcon={app}\PdfToImage.exe
-LicenseFile=..\third_party\pdfium\LICENSE
+LicenseFile=License_zh.txt
 
 [Languages]
 Name: "chinesesimp"; MessagesFile: "ChineseSimplified.isl"
