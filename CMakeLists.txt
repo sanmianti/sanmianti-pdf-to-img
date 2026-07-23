@@ -49,6 +49,7 @@ target_link_libraries(pdf_common PUBLIC shell32)
 
 add_executable(PdfWorker
   src/worker/worker_main.cpp
+  src/worker/image_pdf_builder.cpp
   src/worker/pdf_renderer.cpp
   src/worker/png_encoder.cpp
   resources/worker.rc
@@ -88,6 +89,7 @@ add_test(NAME common_tests COMMAND common_tests)
 
 add_executable(renderer_tests
   tests/unit/renderer_tests.cpp
+  src/worker/image_pdf_builder.cpp
   src/worker/pdf_renderer.cpp
   src/worker/png_encoder.cpp
 )

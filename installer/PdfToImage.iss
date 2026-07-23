@@ -1,4 +1,4 @@
-#define MyAppName "PDF 转图片"
+#define MyAppName "PDF 图片转换"
 #define MyAppVersion "1.0.0"
 
 [Setup]

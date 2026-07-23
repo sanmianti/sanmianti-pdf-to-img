@@ -1,7 +1,12 @@
+#include "common/utf.h"
+#include "worker/image_pdf_builder.h"
 #include "worker/pdf_renderer.h"
+#include "worker/png_encoder.h"
 
 #include <windows.h>
 #include <wincodec.h>
+
+#include <fpdfview.h>
 
 #include <cmath>
 #include <cstdint>
@@ -202,10 +207,53 @@ int wmain() {
   Check(damaged_result.exit_code == pdfimg::WorkerExit::kPdfDamaged,
         "map damaged PDF error");
 
+  const std::wstring first_image = root + L"\\01-横图.png";
+  const std::wstring second_image = root + L"\\02-竖图.png";
+  const std::vector<std::uint8_t> wide_pixels(4 * 2 * 3, 0x80);
+  const std::vector<std::uint8_t> tall_pixels(2 * 4 * 3, 0x40);
+  Check(pdfimg::WritePngAtomically(first_image, wide_pixels.data(), 4, 2, 12) ==
+            pdfimg::PngWriteResult::kSuccess,
+        "write wide image fixture");
+  Check(pdfimg::WritePngAtomically(second_image, tall_pixels.data(), 2, 4, 6) ==
+            pdfimg::PngWriteResult::kSuccess,
+        "write tall image fixture");
+  const std::wstring combined_pdf = root + L"\\图片合集.pdf";
+  std::vector<int> image_progress;
+  const auto image_result = pdfimg::ConvertImagesToPdf(
+      {first_image, second_image}, combined_pdf,
+      [&](int current, int total, const std::string&) {
+        Check(total == 2, "image-to-PDF total count");
+        image_progress.push_back(current);
+      });
+  Check(image_result.exit_code == pdfimg::WorkerExit::kSuccess && image_result.page_count == 2,
+        "convert two images to PDF");
+  Check(image_progress == std::vector<int>({0, 1, 2}),
+        "image-to-PDF progress sequence");
+  FPDF_InitLibrary();
+  const std::string combined_utf8 = pdfimg::WideToUtf8(combined_pdf);
+  FPDF_DOCUMENT combined_document = FPDF_LoadDocument(combined_utf8.c_str(), nullptr);
+  Check(combined_document && FPDF_GetPageCount(combined_document) == 2,
+        "generated PDF has two pages");
+  if (combined_document) {
+    FPDF_PAGE first_page = FPDF_LoadPage(combined_document, 0);
+    FPDF_PAGE second_page = FPDF_LoadPage(combined_document, 1);
+    Check(first_page && FPDF_GetPageWidthF(first_page) > FPDF_GetPageHeightF(first_page),
+          "first image remains first landscape page");
+    Check(second_page && FPDF_GetPageHeightF(second_page) > FPDF_GetPageWidthF(second_page),
+          "second image remains second portrait page");
+    if (first_page) FPDF_ClosePage(first_page);
+    if (second_page) FPDF_ClosePage(second_page);
+    FPDF_CloseDocument(combined_document);
+  }
+  FPDF_DestroyLibrary();
+
   DeleteFileW((output + L"\\page_001.png").c_str());
   DeleteFileW((output + L"\\page_002.png").c_str());
   DeleteFileW(pdf.c_str());
   DeleteFileW(damaged.c_str());
+  DeleteFileW(first_image.c_str());
+  DeleteFileW(second_image.c_str());
+  DeleteFileW(combined_pdf.c_str());
   DeleteFileW(many_pdf.c_str());
   DeleteFileW(huge_pdf.c_str());
   for (int page = 1; page <= 20; ++page) {

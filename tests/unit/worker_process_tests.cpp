@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -64,7 +65,8 @@ struct ProcessResult {
 
 ProcessResult RunWorker(const std::wstring& worker,
                         const std::wstring& input,
-                        const std::wstring& output) {
+                        const std::wstring& output,
+                        bool images_to_pdf = false) {
   ProcessResult result;
   SECURITY_ATTRIBUTES security{};
   security.nLength = sizeof(security);
@@ -81,7 +83,8 @@ ProcessResult RunWorker(const std::wstring& worker,
   startup.hStdOutput = write_pipe;
   startup.hStdError = write_pipe;
   PROCESS_INFORMATION process{};
-  std::wstring command = Quote(worker) + L" --input " + Quote(input) + L" --output " + Quote(output);
+  std::wstring command = Quote(worker) + (images_to_pdf ? L" --images " : L" --input ") +
+                         Quote(input) + L" --output " + Quote(output);
   const BOOL created = CreateProcessW(worker.c_str(), &command[0], nullptr, nullptr, TRUE,
                                       CREATE_NO_WINDOW, nullptr, nullptr, &startup, &process);
   CloseHandle(write_pipe);
@@ -102,6 +105,19 @@ ProcessResult RunWorker(const std::wstring& worker,
   CloseHandle(process.hProcess);
   CloseHandle(read_pipe);
   return result;
+}
+
+bool WriteManifest(const std::wstring& path, const std::vector<std::wstring>& images) {
+  std::ofstream output(path.c_str(), std::ios::binary);
+  const std::uint32_t count = static_cast<std::uint32_t>(images.size());
+  output.write(reinterpret_cast<const char*>(&count), sizeof(count));
+  for (const auto& image : images) {
+    const std::uint32_t length = static_cast<std::uint32_t>(image.size());
+    output.write(reinterpret_cast<const char*>(&length), sizeof(length));
+    output.write(reinterpret_cast<const char*>(image.data()),
+                 static_cast<std::streamsize>(length * sizeof(wchar_t)));
+  }
+  return output.good();
 }
 
 std::vector<pdfimg::WorkerEvent> ParseLines(const std::string& output) {
@@ -147,6 +163,18 @@ int wmain(int argc, wchar_t* argv[]) {
   Check(GetFileAttributesW((output + L"\\page_001.png").c_str()) != INVALID_FILE_ATTRIBUTES,
         "worker creates PNG");
 
+  const std::wstring manifest = root + L"\\图片清单.bin";
+  const std::wstring combined = root + L"\\合成结果.tmp";
+  Check(WriteManifest(manifest, {output + L"\\page_001.png"}), "write image manifest");
+  const ProcessResult image_result = RunWorker(argv[1], manifest, combined, true);
+  Check(image_result.exit_code == 0, "image-to-PDF worker successful exit code");
+  const auto image_events = ParseLines(image_result.output);
+  Check(image_events.size() == 3 && image_events.front().type == pdfimg::WorkerEventType::kStart &&
+            image_events.back().type == pdfimg::WorkerEventType::kDone,
+        "image-to-PDF worker protocol events");
+  Check(GetFileAttributesW(combined.c_str()) != INVALID_FILE_ATTRIBUTES,
+        "image-to-PDF worker creates output");
+
   const std::wstring damaged = root + L"\\损坏.pdf";
   {
     std::ofstream invalid(damaged.c_str(), std::ios::binary);
@@ -161,6 +189,8 @@ int wmain(int argc, wchar_t* argv[]) {
         "damaged worker protocol error");
 
   DeleteFileW((output + L"\\page_001.png").c_str());
+  DeleteFileW(manifest.c_str());
+  DeleteFileW(combined.c_str());
   DeleteFileW(valid.c_str());
   DeleteFileW(damaged.c_str());
   RemoveDirectoryW(output.c_str());
@@ -168,4 +198,3 @@ int wmain(int argc, wchar_t* argv[]) {
   if (failures == 0) std::cout << "worker_process_tests: all checks passed\n";
   return failures == 0 ? 0 : 1;
 }
-

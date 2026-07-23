@@ -20,7 +20,7 @@ BEGIN
       VALUE "FileVersion", "1.0.0"
       VALUE "InternalName", "PdfWorker.exe"
       VALUE "OriginalFilename", "PdfWorker.exe"
-      VALUE "ProductName", "PDF To Image"
+      VALUE "ProductName", "PDF & Image Converter"
       VALUE "ProductVersion", "1.0.0"
     END
   END

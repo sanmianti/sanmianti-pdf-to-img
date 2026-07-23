@@ -155,4 +155,63 @@ bool CleanupTemporaryDirectory(const std::wstring& temporary_directory) {
   return DeleteTree(temporary_directory);
 }
 
+bool PreparePdfOutputPlan(const std::wstring& first_image_path, const std::wstring& output_root,
+                          FileOutputPlan* plan, std::wstring* error) {
+  if (!plan) return false;
+  const DWORD root_attributes = GetFileAttributesW(output_root.c_str());
+  if (root_attributes == INVALID_FILE_ATTRIBUTES ||
+      !(root_attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+    if (error) *error = L"输出目录不存在";
+    return false;
+  }
+  std::wstring root = output_root;
+  while (root.size() > 3 && (root.back() == L'\\' || root.back() == L'/')) root.pop_back();
+  std::wstring name = LastComponent(first_image_path);
+  const size_t dot = name.find_last_of(L'.');
+  if (dot != std::wstring::npos) name.resize(dot);
+  if (name.empty()) name = L"图片合集";
+  const std::wstring base = root + L"\\" + name;
+
+  FileOutputPlan candidate;
+  candidate.final_path = base + L".pdf";
+  for (unsigned suffix = 2; Exists(candidate.final_path); ++suffix) {
+    if (suffix > 100000) {
+      if (error) *error = L"无法分配输出文件";
+      return false;
+    }
+    candidate.final_path = base + L" (" + std::to_wstring(suffix) + L").pdf";
+  }
+  candidate.temporary_path = candidate.final_path + kTemporaryMarker +
+                             std::to_wstring(GetCurrentProcessId()) + L"-" +
+                             std::to_wstring(GetTickCount64());
+  if (Exists(candidate.temporary_path)) {
+    if (error) *error = L"无法分配临时输出文件";
+    return false;
+  }
+  *plan = candidate;
+  return true;
+}
+
+bool CommitPdfOutputPlan(const FileOutputPlan& plan, std::wstring* error) {
+  if (plan.temporary_path.empty() || plan.final_path.empty() ||
+      plan.temporary_path.find(kTemporaryMarker) == std::wstring::npos ||
+      ParentDirectory(plan.temporary_path) != ParentDirectory(plan.final_path) ||
+      Exists(plan.final_path)) {
+    if (error) *error = L"输出路径校验失败";
+    return false;
+  }
+  if (!MoveFileExW(plan.temporary_path.c_str(), plan.final_path.c_str(), MOVEFILE_WRITE_THROUGH)) {
+    if (error) *error = L"无法完成输出文件";
+    return false;
+  }
+  return true;
+}
+
+bool CleanupTemporaryFile(const std::wstring& temporary_path) {
+  if (temporary_path.empty() || temporary_path.find(kTemporaryMarker) == std::wstring::npos) {
+    return false;
+  }
+  return DeleteFileW(temporary_path.c_str()) != FALSE || GetLastError() == ERROR_FILE_NOT_FOUND;
+}
+
 }  // namespace pdfimg

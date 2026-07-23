@@ -82,6 +82,19 @@ int wmain(int argc, wchar_t* argv[]) {
         "prepare output plan in configured folder");
   Check(pdfimg::CleanupTemporaryDirectory(configured.temporary_directory),
         "clean configured output temporary directory");
+
+  pdfimg::FileOutputPlan pdf_output;
+  Check(pdfimg::PreparePdfOutputPlan(pdf, custom_output, &pdf_output, &configured_error),
+        "prepare configured PDF output file");
+  HANDLE temporary_pdf = CreateFileW(pdf_output.temporary_path.c_str(), GENERIC_WRITE, 0, nullptr,
+                                     CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+  Check(temporary_pdf != INVALID_HANDLE_VALUE, "create temporary PDF output");
+  if (temporary_pdf != INVALID_HANDLE_VALUE) CloseHandle(temporary_pdf);
+  Check(pdfimg::CommitPdfOutputPlan(pdf_output, &configured_error),
+        "atomically commit PDF output file");
+  Check(GetFileAttributesW(pdf_output.final_path.c_str()) != INVALID_FILE_ATTRIBUTES,
+        "committed PDF output exists");
+  DeleteFileW(pdf_output.final_path.c_str());
   RemoveDirectoryW(custom_output.c_str());
 
   pdfimg::OutputPlan first;

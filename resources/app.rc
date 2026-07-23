@@ -22,11 +22,11 @@ BEGIN
     BLOCK "080404b0"
     BEGIN
       VALUE "CompanyName", "PdfToImage"
-      VALUE "FileDescription", L"PDF 转图片"
+      VALUE "FileDescription", L"PDF 图片转换"
       VALUE "FileVersion", "1.0.0"
       VALUE "InternalName", "PdfToImage.exe"
       VALUE "OriginalFilename", "PdfToImage.exe"
-      VALUE "ProductName", L"PDF 转图片"
+      VALUE "ProductName", L"PDF 图片转换"
       VALUE "ProductVersion", "1.0.0"
     END
   END

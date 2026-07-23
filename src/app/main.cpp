@@ -13,7 +13,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, wchar_t*, int show_command)
 
   pdfimg::AppWindow window;
   if (!window.Create(instance, show_command)) {
-    MessageBoxW(nullptr, L"无法启动 PDF 转图片。", L"PDF 转图片", MB_OK | MB_ICONERROR);
+    MessageBoxW(nullptr, L"无法启动 PDF 图片转换。", L"PDF 图片转换", MB_OK | MB_ICONERROR);
     CoUninitialize();
     return 1;
   }
