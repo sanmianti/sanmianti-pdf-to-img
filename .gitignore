@@ -1,5 +1,4 @@
 /build/
-/release/
 *.user
 *.suo
 *.VC.db
