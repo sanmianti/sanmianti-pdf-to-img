@@ -170,12 +170,12 @@
       line-height: 2;
     }
     .product-shot {
-      width: min(100%, 620px);
+      width: min(100%, 680px);
       margin: 0;
       justify-self: end;
     }
     .product-stage {
-      padding: 18px 18px 0;
+      padding: 34px 14px 24px;
       position: relative;
       isolation: isolate;
     }
@@ -183,26 +183,23 @@
       content: "";
       border-radius: 50%;
       position: absolute;
-      inset: 4% 4% 18%;
+      inset: 12% 2% 8%;
       z-index: -1;
-      background: radial-gradient(circle, rgba(52, 120, 246, .1), rgba(52, 120, 246, 0) 70%);
-      filter: blur(10px);
+      background: radial-gradient(circle, rgba(52, 120, 246, .12), rgba(217, 120, 82, .04) 38%, transparent 72%);
+      filter: blur(18px);
     }
     .shot-frame {
-      border: 1px solid rgba(40, 54, 75, .18);
-      border-radius: 11px;
       position: relative;
       z-index: 1;
-      overflow: hidden;
-      background: #f5f7fb;
-      box-shadow:
-        0 34px 76px rgba(36, 40, 48, .16),
-        0 3px 10px rgba(36, 40, 48, .08);
+      transform: rotate(2.8deg);
+      transform-origin: center;
     }
     .product-shot img {
       width: 100%;
       height: auto;
-      aspect-ratio: 880 / 559;
+      filter:
+        drop-shadow(0 30px 30px rgba(36, 40, 48, .18))
+        drop-shadow(0 5px 8px rgba(36, 40, 48, .08));
     }
     .conversion-card {
       padding: 11px 13px 11px 11px;
@@ -215,8 +212,8 @@
       box-shadow: 0 8px 22px rgba(36, 40, 48, .08);
     }
     .conversion-row {
+      display: none;
       margin-top: 14px;
-      display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
     }
@@ -356,9 +353,9 @@
       .principles { padding: 84px 0; }
       .workflow { padding: 84px 0 88px; }
       .section-heading { margin-bottom: 43px; }
-      .product-stage { padding: 14px 0 0; }
-      .product-stage::before { inset: 4% 0 22%; }
-      .shot-frame { border-radius: 8px; }
+      .product-stage { padding: 22px 0 14px; }
+      .product-stage::before { inset: 10% 0 10%; }
+      .shot-frame { transform: rotate(1.6deg); }
       .conversion-row { margin-top: 10px; gap: 8px; }
       .conversion-card {
         min-width: 0;
@@ -411,7 +408,7 @@
         <span>PDF 图片转换</span>
       </div>
 
-      <h1>PDF 与图片之间，轻轻一拖</h1>
+      <h1>PDF 与图片之间，轻松互转</h1>
       <p class="hero-copy">
         PDF 按页生成清晰 PNG，多张图片按顺序合成为 PDF。
         <span class="detail">无需上传，无需设置复杂参数，在本地安静完成。</span>
@@ -447,7 +444,7 @@
         <figure class="product-shot">
           <div class="product-stage">
             <div class="shot-frame">
-              <img src="./assets/screenshots/pdf-to-image-idle.png" width="880" height="559" alt="PDF 图片转换 Windows 客户端主界面">
+              <img src="./assets/screenshots/pdf-to-image-product-v2.webp" width="1360" height="907" alt="PDF 图片转换 Windows 客户端产品界面示意">
             </div>
 
             <div class="conversion-row">
@@ -547,7 +544,7 @@
     </section>
 
     <section class="download shell" id="download" aria-labelledby="download-title">
-      <h2 id="download-title">下一次转换文件，试试只拖一下。</h2>
+      <h2 id="download-title">PDF 转图片，图片转 PDF，拖进来就完成。</h2>
       <p>一个窗口，两种方向。把剩下的步骤交给 PDF 图片转换。</p>
       <a class="button" href="./downloads/PdfToImage-Setup-1.0.0.exe" download>
         下载 Windows 版
