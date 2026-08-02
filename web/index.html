@@ -40,8 +40,9 @@
 
     .hero {
       height: 100vh;
-      height: 100dvh;
+      height: 100svh;
       min-height: 560px;
+      min-height: min(560px, 100svh);
       padding: clamp(24px, 5vh, 42px) 24px;
       display: grid;
       place-items: center;
@@ -120,9 +121,11 @@
       font-size: 10.5px;
       letter-spacing: .08em;
       position: absolute;
-      bottom: max(clamp(16px, 3.7vh, 31px), env(safe-area-inset-bottom));
+      bottom: max(clamp(20px, 3.7svh, 31px), calc(env(safe-area-inset-bottom) + 16px));
       left: 50%;
+      z-index: 2;
       transform: translateX(-50%);
+      white-space: nowrap;
     }
 
     .showcase {
@@ -333,14 +336,18 @@
     @media (max-width: 560px) {
       .shell { width: min(calc(100% - 32px), var(--max)); }
       .wrap { width: min(calc(100% - 32px), 1040px); }
-      .hero { min-height: 520px; padding: clamp(20px, 4.5vh, 38px) 20px; }
+      .hero {
+        min-height: 520px;
+        min-height: min(520px, 100svh);
+        padding: clamp(20px, 4.5vh, 38px) 20px;
+      }
       .hero-inner { margin-top: -3vh; }
       .brand { margin-bottom: clamp(20px, 4.2vh, 35px); font-size: 16px; }
       .brand-logo { width: 21px; height: 21px; }
       .hero h1 { font-size: 28px; line-height: 1.25; }
       .hero-copy { max-width: 350px; font-size: 13.5px; line-height: 1.9; }
       .hero-copy .detail { display: inline; }
-      .scroll-cue { bottom: max(clamp(16px, 3.7vh, 24px), env(safe-area-inset-bottom)); }
+      .scroll-cue { bottom: max(clamp(16px, 3.7svh, 24px), calc(env(safe-area-inset-bottom) + 12px)); }
       .showcase,
       .principles { padding: 84px 0; }
       .workflow { padding: 84px 0 88px; }
@@ -370,13 +377,13 @@
     }
 
     @media (max-height: 560px) {
-      .hero { min-height: 500px; }
+      .hero { min-height: min(500px, 100svh); }
       .hero-inner { margin-top: -5vh; }
       .brand { margin-bottom: 16px; }
       .hero-copy { margin-top: 10px; line-height: 1.65; }
       .hero-actions { margin-top: 14px; }
       .hero-note { margin-top: 9px; }
-      .scroll-cue { bottom: max(10px, env(safe-area-inset-bottom)); }
+      .scroll-cue { bottom: max(12px, calc(env(safe-area-inset-bottom) + 8px)); }
     }
 
     @media (prefers-reduced-motion: reduce) {
